@@ -4,6 +4,8 @@ import json
 import logging
 import requests
 
+from  urllib.parse import quote_plus
+
 from django.contrib.auth import get_user_model
 from django.contrib.auth.backends import ModelBackend
 from django.core.exceptions import SuspiciousOperation, ImproperlyConfigured
@@ -208,7 +210,7 @@ class OIDCAuthenticationBackend(ModelBackend):
                 'client_secret': self.OIDC_RP_CLIENT_SECRET,
             })
         elif self.OIDC_RP_CLIENT_AUTH_METHOD == 'client_secret_basic':
-            auth = HTTPBasicAuth(self.OIDC_RP_CLIENT_ID, self.OIDC_RP_CLIENT_SECRET)
+            auth = HTTPBasicAuth(quote_plus(self.OIDC_RP_CLIENT_ID), quote_plus(self.OIDC_RP_CLIENT_SECRET))
 
         # Get the token
         response = requests.post(self.OIDC_OP_TOKEN_ENDPOINT,

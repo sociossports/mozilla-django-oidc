@@ -15,6 +15,8 @@ from django.utils import six
 from josepy.jwk import JWK
 from josepy.jws import JWS, Header
 
+from requests.auth import HTTPBasicAuth
+
 from mozilla_django_oidc.utils import absolutify, import_from_settings
 
 
@@ -52,6 +54,8 @@ class OIDCAuthenticationBackend(ModelBackend):
         self.OIDC_RP_CLIENT_SECRET = import_from_settings('OIDC_RP_CLIENT_SECRET')
         self.OIDC_RP_SIGN_ALGO = import_from_settings('OIDC_RP_SIGN_ALGO', 'HS256')
         self.OIDC_RP_IDP_SIGN_KEY = import_from_settings('OIDC_RP_IDP_SIGN_KEY', None)
+
+        self.OIDC_RP_CLIENT_AUTH_METHOD = import_from_settings('OIDC_RP_CLIENT_AUTH_METHOD', 'client_secret_post')
 
         if self.OIDC_RP_SIGN_ALGO.startswith('RS') and (
             self.OIDC_RP_IDP_SIGN_KEY is None and
@@ -184,13 +188,12 @@ class OIDCAuthenticationBackend(ModelBackend):
         code = self.request.GET.get('code')
         nonce = kwargs.pop('nonce', None)
         session = self.request.session
+        auth = None
 
         if not code or not state:
             raise SuspiciousOperation('Code or state not found.')
 
         token_payload = {
-            'client_id': self.OIDC_RP_CLIENT_ID,
-            'client_secret': self.OIDC_RP_CLIENT_SECRET,
             'grant_type': 'authorization_code',
             'code': code,
             'redirect_uri': absolutify(
@@ -199,9 +202,18 @@ class OIDCAuthenticationBackend(ModelBackend):
             ),
         }
 
+        if self.OIDC_RP_CLIENT_AUTH_METHOD == 'client_secret_post':
+            token_payload.update({
+                'client_id': self.OIDC_RP_CLIENT_ID,
+                'client_secret': self.OIDC_RP_CLIENT_SECRET,
+            })
+        elif self.OIDC_RP_CLIENT_AUTH_METHOD == 'client_secret_basic':
+            auth = HTTPBasicAuth(self.OIDC_RP_CLIENT_ID, self.OIDC_RP_CLIENT_SECRET)
+
         # Get the token
         response = requests.post(self.OIDC_OP_TOKEN_ENDPOINT,
                                  data=token_payload,
+                                 auth=auth,
                                  verify=import_from_settings('OIDC_VERIFY_SSL', True))
         response.raise_for_status()
 
